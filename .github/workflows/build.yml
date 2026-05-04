@@ -23,8 +23,8 @@ jobs:
       - name: Install Platforms and Seeed Core
         run: |
           arduino-cli config init --overwrite
-          arduino-cli config add board_manager.additional_urls https://adafruit.github.io/arduino-board-index/package_adafruit_index.json
-          arduino-cli config add board_manager.additional_urls https://files.seeedstudio.com/arduino/package_seeeduino_boards_index.json
+          arduino-cli config add board_manager.additional_urls https://github.io
+          arduino-cli config add board_manager.additional_urls https://seeedstudio.com
           arduino-cli core update-index
           arduino-cli core install Seeeduino:nrf52
 
@@ -35,6 +35,7 @@ jobs:
 
       - name: Compile simple_daplink
         run: |
+          # Target the XIAO nRF52840 Sense
           arduino-cli compile --fqbn Seeeduino:nrf52:xiaonRF52840Sense \
             --build-property "compiler.cpp.extra_flags=-DUSE_TINYUSB" \
             --output-dir ./build \
@@ -42,7 +43,7 @@ jobs:
 
       - name: Create and Run UF2 Converter
         run: |
-          # Write a corrected, more robust conversion script
+          # Write the updated conversion script with the generic nRF52840 ID
           cat << 'EOF' > uf2conv.py
           import sys, struct, binascii, os
 
@@ -62,24 +63,24 @@ jobs:
                   addr = int(line[3:7], 16)
                   rectype = int(line[7:9], 16)
                   data = line[9:9+length*2]
-                  if rectype == 0: # Data Record
+                  if rectype == 0: 
                       dataplocks.append((curr_upper_addr + addr, binascii.unhexlify(data)))
-                  elif rectype == 4: # Extended Linear Address Record
+                  elif rectype == 4: 
                       curr_upper_addr = int(data, 16) << 16
 
               with open(outfile, "wb") as f:
                   num_blocks = len(dataplocks)
                   for i, (addr, data) in enumerate(dataplocks):
-                      # UF2 Block Header
+                      # Block header: Start0, Start1, Flags (FamilyID present), Addr, Size, Index, Total, FamilyID
                       block = struct.pack("<IIIIIIII", 0x0A324655, 0x9E5D5157, 0x00002000, addr, 256, i, num_blocks, familyid)
                       block += data.ljust(476, b'\0')
                       block += struct.pack("<I", 0x0AB16F30)
                       f.write(block)
-              print(f"Successfully created {outfile}")
+              print(f"Successfully created {outfile} with Family ID {hex(familyid)}")
 
           if __name__ == "__main__":
-              # Hardcode the inputs for this specific build to avoid argument errors
-              convert_to_uf2("./build/simple_daplink.ino.hex", "./build/XIAO_DAPLINK.uf2", 0xADA52840)
+              # Using the Generic nRF52840 ID (0x7e3d3dec) for maximum bootloader compatibility
+              convert_to_uf2("./build/simple_daplink.ino.hex", "./build/XIAO_DAPLINK.uf2", 0x7e3d3dec)
           EOF
 
           python3 uf2conv.py
