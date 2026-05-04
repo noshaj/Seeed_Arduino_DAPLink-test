@@ -17,21 +17,23 @@ jobs:
         run: |
           pip3 install adafruit-nrfutil
 
-      - name: Setup Arduino CLI
-        uses: arduino/setup-arduino-cli@v1
-
-      - name: Install Platforms and Seeed Core
+      - name: Manual Arduino CLI Setup
         run: |
-          # Scorched earth: delete existing config to kill the "github.io" ghost URLs
-          rm -rf /home/runner/.arduino15
-          arduino-cli config init
+          # 1. Download and install arduino-cli manually to ensure NO CACHED CONFIGS
+          curl -fsSL https://githubusercontent.com | sh
+          echo "$GITHUB_WORKSPACE/bin" >> $GITHUB_PATH
           
-          # Add the verified URLs from your settings
-          arduino-cli config add board_manager.additional_urls https://github.io
-          arduino-cli config add board_manager.additional_urls https://files.seeedstudio.com/arduino/package_seeeduino_boards_index.json
+          # 2. Define exactly where the data lives to avoid default hidden folders
+          export ARDUINO_DIRECTORIES_DATA=$GITHUB_WORKSPACE/arduino_data
+          mkdir -p $ARDUINO_DIRECTORIES_DATA
           
-          arduino-cli core update-index
-          arduino-cli core install Seeeduino:nrf52
+          # 3. Create a clean config with only the correct URLs
+          ./bin/arduino-cli config init --dest-dir $GITHUB_WORKSPACE --overwrite
+          ./bin/arduino-cli config set board_manager.additional_urls https://github.io --config-file $GITHUB_WORKSPACE/arduino-cli.yaml
+          
+          # 4. Use the specific config file for all subsequent commands
+          ./bin/arduino-cli core update-index --config-file $GITHUB_WORKSPACE/arduino-cli.yaml
+          ./bin/arduino-cli core install Seeeduino:nrf52 --config-file $GITHUB_WORKSPACE/arduino-cli.yaml
 
       - name: Setup Workspace Libraries
         run: |
@@ -40,38 +42,29 @@ jobs:
 
       - name: Compile simple_daplink
         run: |
-          arduino-cli compile --fqbn Seeeduino:nrf52:xiaonRF52840Sense \
+          # Pointing to the manually installed CLI and local config
+          $GITHUB_WORKSPACE/bin/arduino-cli compile --fqbn Seeeduino:nrf52:xiaonRF52840Sense \
             --build-property "compiler.cpp.extra_flags=-DUSE_TINYUSB" \
             --output-dir ./build \
+            --config-file $GITHUB_WORKSPACE/arduino-cli.yaml \
             $GITHUB_WORKSPACE/examples/simple_daplink/simple_daplink.ino
 
       - name: Create and Run UF2 Converter
         run: |
-          # This writes the logic directly to a local file to avoid ANY network calls
           cat << 'EOF' > uf2conv.py
           import sys, struct, binascii, os
-
           def convert_to_uf2(infile, outfile, familyid):
               if not os.path.exists(infile):
-                  print(f"Error: {infile} not found")
-                  sys.exit(1)
-              with open(infile, "r") as f:
-                  lines = f.readlines()
-              
-              dataplocks = []
-              curr_upper_addr = 0
+                  print(f"Error: {infile} not found"); sys.exit(1)
+              with open(infile, "r") as f: lines = f.readlines()
+              dataplocks = []; curr_upper_addr = 0
               for line in lines:
                   line = line.strip()
                   if not line.startswith(':'): continue
-                  length = int(line[1:3], 16)
-                  addr = int(line[3:7], 16)
-                  rectype = int(line[7:9], 16)
+                  length, addr, rectype = int(line[1:3], 16), int(line[3:7], 16), int(line[7:9], 16)
                   data = line[9:9+length*2]
-                  if rectype == 0: 
-                      dataplocks.append((curr_upper_addr + addr, binascii.unhexlify(data)))
-                  elif rectype == 4: 
-                      curr_upper_addr = int(data, 16) << 16
-
+                  if rectype == 0: dataplocks.append((curr_upper_addr + addr, binascii.unhexlify(data)))
+                  elif rectype == 4: curr_upper_addr = int(data, 16) << 16
               with open(outfile, "wb") as f:
                   num_blocks = len(dataplocks)
                   for i, (addr, data) in enumerate(dataplocks):
@@ -80,11 +73,9 @@ jobs:
                       block += struct.pack("<I", 0x0AB16F30)
                       f.write(block)
               print(f"Successfully created {outfile}")
-
           if __name__ == "__main__":
               convert_to_uf2("./build/simple_daplink.ino.hex", "./build/XIAO_DAPLINK.uf2", 0x7e3d3dec)
           EOF
-
           python3 uf2conv.py
 
       - name: Upload Build Artifacts
