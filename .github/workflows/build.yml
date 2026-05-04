@@ -11,37 +11,36 @@ jobs:
       - name: Setup Arduino CLI
         uses: arduino/setup-arduino-cli@v1
 
-      - name: Install Seeed nRF52 Platform
+      - name: Install Platforms and Seeed Core
         run: |
-          # ACTUAL direct link to the JSON index file
-          BOARD_URL="https://seeedstudio.com"
+          # Use both URLs from your screenshot, comma-separated
+          URLS="https://github.io"
           
-          # Wipe old bad config and set the ONLY correct URL
           arduino-cli config init --overwrite
-          arduino-cli config set board_manager.additional_urls $BOARD_URL
-          
-          # Update and install
+          arduino-cli config set board_manager.additional_urls $URLS
           arduino-cli core update-index
           arduino-cli core install Seeeduino:nrf52
 
       - name: Install Dependencies
         run: |
+          # The Adafruit core URL (from your screenshot) is often needed for TinyUSB dependencies
           arduino-cli lib install "Adafruit TinyUSB Library"
           mkdir -p $HOME/Arduino/libraries
           ln -s $GITHUB_WORKSPACE $HOME/Arduino/libraries/Seeed_Arduino_DAPLink
 
       - name: Compile simple_daplink
         run: |
-          # Using extra_flags to ensure the nRF52840 MCU definition remains intact
+          # Target the XIAO nRF52840 Sense FQBN
           arduino-cli compile --fqbn Seeeduino:nrf52:xiaonRF52840Sense \
-          --build-property "compiler.cpp.extra_flags=-DUSE_TINYUSB" \
-          --output-dir ./build \
-          $GITHUB_WORKSPACE/examples/simple_daplink/simple_daplink.ino
+            --build-property "compiler.cpp.extra_flags=-DUSE_TINYUSB" \
+            --output-dir ./build \
+            $GITHUB_WORKSPACE/examples/simple_daplink/simple_daplink.ino
 
       - name: Convert HEX to UF2
         run: |
+          # Fetch the official conversion script
           wget https://githubusercontent.com
-          # Family ID 0xADA52840 is for the XIAO nRF52840 bootloader
+          # Convert to UF2 using the XIAO nRF52840 family ID (0xADA52840)
           python3 uf2conv.py ./build/simple_daplink.ino.hex -c -f 0xADA52840 -o ./build/XIAO_DAPLINK.uf2
 
       - name: Upload Build Artifacts
