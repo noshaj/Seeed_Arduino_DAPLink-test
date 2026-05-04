@@ -21,11 +21,15 @@ jobs:
 
       - name: Install Platforms and Seeed Core
         run: |
-          # Waypoint Fix: Purge corrupted ghost URLs
+          # 1. KILL the corrupted global folder holding the ghost URLs
           rm -rf /home/runner/.arduino15
           arduino-cli config init --overwrite
+          
+          # 2. FIX: Use the FULL verified URLs from the Waypoint screenshot
           arduino-cli config add board_manager.additional_urls https://adafruit.github.io/arduino-board-index/package_adafruit_index.json
           arduino-cli config add board_manager.additional_urls https://files.seeedstudio.com/arduino/package_seeeduino_boards_index.json
+          
+          # 3. Update and install core
           arduino-cli core update-index
           arduino-cli core install Seeeduino:nrf52
 
@@ -36,21 +40,21 @@ jobs:
 
       - name: Compile simple_daplink
         run: |
-          # USB Identification flags to ensure the Mac sees the device after reboot
+          # FQBN and USB flags for XIAO nRF52840 Sense
           arduino-cli compile --fqbn Seeeduino:nrf52:xiaonRF52840Sense \
             --build-property "compiler.cpp.extra_flags=-DUSE_TINYUSB -DUSB_VID=0x2886 -DUSB_PID=0x8045" \
             --output-dir ./build \
             $GITHUB_WORKSPACE/examples/simple_daplink/simple_daplink.ino
 
-      - name: Create Offline UF2 Converter
+      - name: Create and Run UF2 Converter
         run: |
-          # Writing the verified conversion logic locally to bypass all DNS/Curl errors
+          # The exact 256-byte alignment script that triggered your reboot
           cat << 'EOF' > uf2conv.py
           import sys, struct, binascii, os
-
           def convert_to_uf2(infile, outfile, familyid):
-              with open(infile, "r") as f:
-                  lines = f.readlines()
+              if not os.path.exists(infile):
+                  print(f"Error: {infile} not found"); sys.exit(1)
+              with open(infile, "r") as f: lines = f.readlines()
               data = {}
               curr_upper_addr = 0
               for line in lines:
@@ -67,9 +71,8 @@ jobs:
                   elif rectype == 4:
                       curr_upper_addr = int(line[9:13], 16) << 16
               if not data:
-                  sys.exit(1)
+                  print("No data found in HEX"); sys.exit(1)
               addrs = sorted(data.keys())
-              # MANDATORY: Align to 256-byte boundary for nRF52840
               min_addr = addrs[0] & ~0xFF
               max_addr = addrs[-1]
               with open(outfile, "wb") as f:
@@ -78,13 +81,11 @@ jobs:
                       chunk = bytearray([data.get(addr + i, 0xFF) for i in range(256)])
                       if any(b != 0xFF for b in chunk):
                           blocks.append((addr, chunk))
+                  num_blocks = len(blocks)
                   for i, (addr, chunk) in enumerate(blocks):
-                      # Header: 0x2000 flag signals FamilyID is present
-                      header = struct.pack("<IIIIIIII", 0x0A324655, 0x9E5D5157, 0x00002000, addr, 256, i, len(blocks), familyid)
-                      # Payload (476 bytes) + Footer (4 bytes) = 480 bytes
+                      header = struct.pack("<IIIIIIII", 0x0A324655, 0x9E5D5157, 0x00002000, addr, 256, i, num_blocks, familyid)
                       f.write(header + chunk + b"\x00" * 220 + struct.pack("<I", 0x0AB16F30))
-              print(f"Created {outfile} for ID {hex(familyid)}")
-
+              print(f"Success: Created {outfile}")
           if __name__ == "__main__":
               convert_to_uf2("./build/simple_daplink.ino.hex", "./build/XIAO_DAPLINK.uf2", 0xADA52840)
           EOF
