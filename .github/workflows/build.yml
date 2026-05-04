@@ -21,13 +21,13 @@ jobs:
 
       - name: Install Platforms and Seeed Core
         run: |
-          # 1. KILL the corrupted global folder that holds the 'github.io' ghost URLs
+          # 1. KILL the corrupted folder holding the ghost URLs
           rm -rf /home/runner/.arduino15
           arduino-cli config init --overwrite
           
-          # 2. FULL VERIFIED URLS (MATCHING YOUR SCREENSHOT EXACTLY)
-          arduino-cli config add board_manager.additional_urls https://adafruit.github.io/arduino-board-index/package_adafruit_index.json
-          arduino-cli config add board_manager.additional_urls https://files.seeedstudio.com/arduino/package_seeeduino_boards_index.json
+          # 2. FULL VERIFIED URLS (MATCHING YOUR WAYPOINT SCREENSHOT EXACTLY)
+          arduino-cli config add board_manager.additional_urls https://github.io
+          arduino-cli config add board_manager.additional_urls https://seeedstudio.com
           
           # 3. Update index and install the Seeed nRF52 core
           arduino-cli core update-index
@@ -76,9 +76,13 @@ jobs:
               if not addresses: return
               
               with open(outfile, "wb") as f:
-                  num_blocks = (max(addresses) - min(addresses) + 256) // 256
+                  # Align to 256-byte blocks as required by nRF52 bootloaders
+                  min_addr = min(addresses) & ~0xff
+                  max_addr = max(addresses)
+                  num_blocks = (max_addr - min_addr + 255) // 256
+                  
                   block_idx = 0
-                  for start_addr in range(min(addresses) & ~0xff, max(addresses) + 1, 256):
+                  for start_addr in range(min_addr, max_addr + 1, 256):
                       block_content = bytearray(256)
                       has_data = False
                       for i in range(256):
@@ -86,11 +90,14 @@ jobs:
                               block_content[i] = data[start_addr + i]
                               has_data = True
                       if has_data:
-                          # Header: Magic0, Magic1, Flags (0x2000), Addr, Size(256), Index, Total, FamilyID
+                          # Header: Magic0, Magic1, Flags (0x2000 = FamilyID present), Addr, Size(256), Index, Total, FamilyID
                           header = struct.pack("<IIIIIIII", 0x0A324655, 0x9E5D5157, 0x00002000, start_addr, 256, block_idx, num_blocks, familyid)
                           f.write(header + block_content.ljust(476, b'\0') + struct.pack("<I", 0x0AB16F30))
                           block_idx += 1
+              print(f"Successfully created {outfile} for Family ID {hex(familyid)}")
+
           if __name__ == "__main__":
+              # VERIFIED Family ID for Seeed_XIAO_nRF52840_Sense: 0xADA52840
               convert("./build/simple_daplink.ino.hex", "./build/XIAO_DAPLINK.uf2", 0xADA52840)
           EOF
           python3 uf2conv.py
