@@ -14,30 +14,27 @@ jobs:
           python-version: '3.x'
 
       - name: Install nRF Util
-          # Required by Seeed core to compile for nRF52 series
         run: pip3 install adafruit-nrfutil
 
-      - name: Manual Arduino CLI Setup
-        run: |
-          # 1. Download and install CLI to a local bin folder to bypass corrupted global setup
-          curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | sh
-          
-          # 2. Define a 100% local config in the workspace
-          # This overrides the default /home/runner/.arduino15 directory entirely
-          cat << 'EOF' > local-arduino-cli.yaml
-          board_manager:
-            additional_urls:
-              - https://github.io
-              - https://seeedstudio.com
-          directories:
-            data: ./arduino_data
-            downloads: ./arduino_downloads
-            user: ./arduino_user
-          EOF
+      - name: Setup Arduino CLI
+        uses: arduino/setup-arduino-cli@v1
 
-          # 3. Force CLI to use this specific config for all operations
-          ./bin/arduino-cli core update-index --config-file local-arduino-cli.yaml
-          ./bin/arduino-cli core install Seeeduino:nrf52 --config-file local-arduino-cli.yaml
+      - name: Install Platforms and Seeed Core
+        run: |
+          # 1. Kill the corrupted global folder entirely
+          rm -rf /home/runner/.arduino15
+          
+          # 2. Use a unique config filename to bypass any hidden system-level caching
+          # This is the 'secret sauce' to get back to the Run #20 success
+          arduino-cli config init --dest-dir . --overwrite
+          mv arduino-cli.yaml clean-config.yaml
+          
+          # 3. Use ONLY the clean config for all commands
+          arduino-cli config add board_manager.additional_urls https://github.io --config-file clean-config.yaml
+          arduino-cli config add board_manager.additional_urls https://seeedstudio.com --config-file clean-config.yaml
+          
+          arduino-cli core update-index --config-file clean-config.yaml
+          arduino-cli core install Seeeduino:nrf52 --config-file clean-config.yaml
 
       - name: Setup Workspace Libraries
         run: |
@@ -46,16 +43,16 @@ jobs:
 
       - name: Compile simple_daplink
         run: |
-          # Use the local binary and the local config to ensure isolation
-          ./bin/arduino-cli compile --fqbn Seeeduino:nrf52:xiaonRF52840Sense \
+          # Force compiler to use the clean local config
+          arduino-cli compile --fqbn Seeeduino:nrf52:xiaonRF52840Sense \
             --build-property "compiler.cpp.extra_flags=-DUSE_TINYUSB" \
             --output-dir ./build \
-            --config-file local-arduino-cli.yaml \
+            --config-file clean-config.yaml \
             $GITHUB_WORKSPACE/examples/simple_daplink/simple_daplink.ino
 
       - name: Create and Run UF2 Converter
         run: |
-          # This embedded Python script bypasses all wget/curl DNS resolution errors
+          # This is the exact Python heredoc that worked for you in Run #20
           cat << 'EOF' > uf2conv.py
           import sys, struct, binascii, os
           def convert_to_uf2(infile, outfile, familyid):
@@ -79,7 +76,6 @@ jobs:
                       f.write(block)
               print(f"Successfully created {outfile}")
           if __name__ == "__main__":
-              # Generic nRF52840 ID for best bootloader compatibility
               convert_to_uf2("./build/simple_daplink.ino.hex", "./build/XIAO_DAPLINK.uf2", 0x7e3d3dec)
           EOF
           python3 uf2conv.py
