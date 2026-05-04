@@ -26,8 +26,8 @@ jobs:
           arduino-cli config init --overwrite
           
           # 2. FULL VERIFIED URLS (MATCHING YOUR WAYPOINT SCREENSHOT EXACTLY)
-          arduino-cli config add board_manager.additional_urls https://github.io
-          arduino-cli config add board_manager.additional_urls https://seeedstudio.com
+         arduino-cli config add board_manager.additional_urls https://adafruit.github.io/arduino-board-index/package_adafruit_index.json
+          arduino-cli config add board_manager.additional_urls https://files.seeedstudio.com/arduino/package_seeeduino_boards_index.json
           
           # 3. Update index and install the Seeed nRF52 core
           arduino-cli core update-index
