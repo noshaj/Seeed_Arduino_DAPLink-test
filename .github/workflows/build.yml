@@ -8,34 +8,36 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install nRF Util
+        run: |
+          python -m pip install --upgrade pip
+          pip3 install adafruit-nrfutil
+
       - name: Setup Arduino CLI
         uses: arduino/setup-arduino-cli@v1
 
       - name: Install Platforms and Seeed Core
         run: |
-          # Initialize a clean config
           arduino-cli config init --overwrite
-          
-          # Add URLs individually to avoid string parsing errors
           arduino-cli config add board_manager.additional_urls https://adafruit.github.io/arduino-board-index/package_adafruit_index.json
           arduino-cli config add board_manager.additional_urls https://files.seeedstudio.com/arduino/package_seeeduino_boards_index.json
-          
-          # Update index and install the core
           arduino-cli core update-index
           arduino-cli core install Seeeduino:nrf52
 
-      - name: Install Dependencies
+      - name: Setup Workspace Libraries
         run: |
-          # Use the library manager to fetch TinyUSB
-          arduino-cli lib install "Adafruit TinyUSB Library"
-          
-          # Link your repo to the Arduino libraries folder so simple_daplink can find it
+          # We skip "arduino-cli lib install" for TinyUSB because it's 
+          # already bundled in the Seeeduino:nrf52 core.
           mkdir -p $HOME/Arduino/libraries
           ln -s $GITHUB_WORKSPACE $HOME/Arduino/libraries/Seeed_Arduino_DAPLink
 
       - name: Compile simple_daplink
         run: |
-          # Target the XIAO nRF52840 Sense variant
           arduino-cli compile --fqbn Seeeduino:nrf52:xiaonRF52840Sense \
             --build-property "compiler.cpp.extra_flags=-DUSE_TINYUSB" \
             --output-dir ./build \
@@ -43,9 +45,7 @@ jobs:
 
       - name: Convert HEX to UF2
         run: |
-          # Download the raw conversion script from Microsoft's repo
           wget https://githubusercontent.com
-          # 0xADA52840 is the correct Family ID for XIAO nRF52840
           python3 uf2conv.py ./build/simple_daplink.ino.hex -c -f 0xADA52840 -o ./build/XIAO_DAPLINK.uf2
 
       - name: Upload Build Artifacts
