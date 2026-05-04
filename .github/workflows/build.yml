@@ -21,15 +21,15 @@ jobs:
 
       - name: Install Platforms and Seeed Core
         run: |
-          # 1. KILL the corrupted global folder (The Run #46 fix)
+          # 1. KILL the corrupted global folder that holds the 'github.io' ghost URLs
           rm -rf /home/runner/.arduino15
           arduino-cli config init --overwrite
           
-          # 2. Add verified URLs
-          arduino-cli config add board_manager.additional_urls https://github.io
-          arduino-cli config add board_manager.additional_urls https://seeedstudio.com
+          # 2. Add the FULL, verified URLs (Matching your screenshot exactly)
+          arduino-cli config add board_manager.additional_urls https://adafruit.github.io/arduino-board-index/package_adafruit_index.json
+          arduino-cli config add board_manager.additional_urls https://files.seeedstudio.com/arduino/package_seeeduino_boards_index.json
           
-          # 3. Update and install
+          # 3. Update index and install the Seeed nRF52 core
           arduino-cli core update-index
           arduino-cli core install Seeeduino:nrf52
 
@@ -40,6 +40,7 @@ jobs:
 
       - name: Compile simple_daplink
         run: |
+          # FQBN for Seeed Studio XIAO nRF52840
           arduino-cli compile --fqbn Seeeduino:nrf52:xiaonRF52840Sense \
             --build-property "compiler.cpp.extra_flags=-DUSE_TINYUSB" \
             --output-dir ./build \
@@ -47,6 +48,7 @@ jobs:
 
       - name: Create and Run UF2 Converter
         run: |
+          # Use the offline Python logic to bypass any DNS/Wget errors
           cat << 'EOF' > uf2conv.py
           import sys, struct, binascii, os
           def convert_to_uf2(infile, outfile, familyid):
@@ -71,7 +73,7 @@ jobs:
               print(f"Successfully created {outfile}")
 
           if __name__ == "__main__":
-              # VERIFIED ID for Seeed_XIAO_nRF52840_Sense: 0xADA52840
+              # FIX: Use 0xADA52840 as required by your INFO_UF2.TXT
               convert_to_uf2("./build/simple_daplink.ino.hex", "./build/XIAO_DAPLINK.uf2", 0xADA52840)
           EOF
           python3 uf2conv.py
