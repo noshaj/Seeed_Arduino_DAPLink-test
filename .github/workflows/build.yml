@@ -21,14 +21,11 @@ jobs:
 
       - name: Install Platforms and Seeed Core
         run: |
-          # 1. Purge corrupted URLs (Waypoint Fix)
+          # Waypoint Fix: Kill ghost URLs
           rm -rf /home/runner/.arduino15
           arduino-cli config init --overwrite
-          
-          # 2. FIX: Use the FULL verified URLs from the Waypoint screenshot
           arduino-cli config add board_manager.additional_urls https://adafruit.github.io/arduino-board-index/package_adafruit_index.json
           arduino-cli config add board_manager.additional_urls https://files.seeedstudio.com/arduino/package_seeeduino_boards_index.json
-          
           arduino-cli core update-index
           arduino-cli core install Seeeduino:nrf52
 
@@ -39,16 +36,17 @@ jobs:
 
       - name: Compile simple_daplink
         run: |
-          # MANDATORY USB FLAGS: These force the XIAO to show up on your Mac
-          # VID 0x2886 and PID 0x8045 are the official IDs for the XIAO nRF52840
+          # 1. FORCE TinyUSB stack
+          # 2. Set VID/PID to Seeed's official XIAO IDs
+          # 3. Disable any "Wait for Serial" logic by defining USE_TINYUSB
           arduino-cli compile --fqbn Seeeduino:nrf52:xiaonRF52840Sense \
-            --build-property "compiler.cpp.extra_flags=-DUSE_TINYUSB -DUSB_VID=0x2886 -DUSB_PID=0x8045" \
+            --build-property "compiler.cpp.extra_flags=-DUSE_TINYUSB -DUSB_VID=0x2886 -DUSB_PID=0x8045 -DCFG_TUSB_MCU=OPT_MCU_NRF52840" \
             --output-dir ./build \
             $GITHUB_WORKSPACE/examples/simple_daplink/simple_daplink.ino
 
       - name: Create and Run UF2 Converter
         run: |
-          # The exact 256-byte alignment script that triggered your reboot success
+          # Using the exact 256-byte alignment script that triggered your reboot success
           cat << 'EOF' > uf2conv.py
           import sys, struct, binascii, os
           def convert_to_uf2(infile, outfile, familyid):
