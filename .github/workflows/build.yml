@@ -21,7 +21,7 @@ jobs:
 
       - name: Install Platforms and Seeed Core
         run: |
-          # 1. KILL the corrupted folder holding the ghost URLs
+          # 1. KILL the corrupted global folder that holds the 'github.io' ghost URLs
           rm -rf /home/runner/.arduino15
           arduino-cli config init --overwrite
           
@@ -48,44 +48,50 @@ jobs:
 
       - name: Create and Run UF2 Converter
         run: |
-          # Robust Python logic to ensure perfect UF2 blocks for nRF52
+          # Robust Python script to handle 256-byte alignment required by nRF52 bootloaders
           cat << 'EOF' > uf2conv.py
-          import sys, struct, binascii, os
+          import sys, struct, os
 
-          def convert_to_uf2(infile, outfile, familyid):
-              if not os.path.exists(infile):
-                  print(f"Error: {infile} not found"); sys.exit(1)
+          def convert(infile, outfile, familyid):
               with open(infile, "r") as f:
                   lines = f.readlines()
               
-              dataplocks = []
-              curr_upper_addr = 0
+              data = {}
+              base_addr = 0
               for line in lines:
-                  line = line.strip()
-                  if not line.startswith(':'): continue
-                  length = int(line[1:3], 16)
+                  if not line.startswith(":"): continue
+                  byte_count = int(line[1:3], 16)
                   addr = int(line[3:7], 16)
-                  rectype = int(line[7:9], 16)
-                  data = line[9:9+length*2]
-                  if rectype == 0: 
-                      dataplocks.append((curr_upper_addr + addr, binascii.unhexlify(data)))
-                  elif rectype == 4: 
-                      curr_upper_addr = int(data, 16) << 16
+                  record_type = int(line[7:9], 16)
+                  content = line[9:9+byte_count*2]
+                  
+                  if record_type == 0:
+                      full_addr = base_addr + addr
+                      for i in range(byte_count):
+                          data[full_addr + i] = int(content[i*2:i*2+2], 16)
+                  elif record_type == 4:
+                      base_addr = int(content, 16) << 16
 
+              addresses = sorted(data.keys())
+              if not addresses: return
+              
               with open(outfile, "wb") as f:
-                  num_blocks = len(dataplocks)
-                  for i, (addr, data) in enumerate(dataplocks):
-                      # Header: Magic0, Magic1, Flags (0x2000 = FamilyID), Addr, Size(256), Index, Total, FamilyID
-                      header = struct.pack("<IIIIIIII", 0x0A324655, 0x9E5D5157, 0x00002000, addr, 256, i, num_blocks, familyid)
-                      # Data must be exactly 476 bytes of padding after the 256 bytes of data
-                      payload = data.ljust(476, b'\0')
-                      footer = struct.pack("<I", 0x0AB16F30)
-                      f.write(header + payload + footer)
-              print(f"Successfully created {outfile} for Family ID {hex(familyid)}")
-
+                  num_blocks = (max(addresses) - min(addresses) + 256) // 256
+                  block_idx = 0
+                  for start_addr in range(min(addresses) & ~0xff, max(addresses) + 1, 256):
+                      block_content = bytearray(256)
+                      has_data = False
+                      for i in range(256):
+                          if (start_addr + i) in data:
+                              block_content[i] = data[start_addr + i]
+                              has_data = True
+                      if has_data:
+                          # Header: Magic0, Magic1, Flags (0x2000), Addr, Size(256), Index, Total, FamilyID
+                          header = struct.pack("<IIIIIIII", 0x0A324655, 0x9E5D5157, 0x00002000, start_addr, 256, block_idx, num_blocks, familyid)
+                          f.write(header + block_content.ljust(476, b'\0') + struct.pack("<I", 0x0AB16F30))
+                          block_idx += 1
           if __name__ == "__main__":
-              # VERIFIED Family ID for Seeed_XIAO_nRF52840_Sense: 0xADA52840
-              convert_to_uf2("./build/simple_daplink.ino.hex", "./build/XIAO_DAPLINK.uf2", 0xADA52840)
+              convert("./build/simple_daplink.ino.hex", "./build/XIAO_DAPLINK.uf2", 0xADA52840)
           EOF
           python3 uf2conv.py
 
