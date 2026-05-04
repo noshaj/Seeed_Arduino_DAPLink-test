@@ -13,22 +13,9 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: Install Build Utilities
+      - name: Install nRF Util
         run: |
-          # Install nrfutil required by the Seeed nRF52 core for the compilation process
           pip3 install adafruit-nrfutil
-          
-          # Download the conversion script from the official Microsoft UF2 repository
-          # We use a direct curl with the full 'raw' subdomain to avoid DNS resolution errors
-          curl -L "https://githubusercontent.com" -o uf2conv.py
-          
-          # Verify the download actually contains python code
-          if grep -q "python" uf2conv.py; then
-            echo "UF2 Script Downloaded Successfully"
-          else
-            echo "UF2 Script Download Failed"
-            exit 1
-          fi
 
       - name: Setup Arduino CLI
         uses: arduino/setup-arduino-cli@v1
@@ -36,34 +23,31 @@ jobs:
       - name: Install Platforms and Seeed Core
         run: |
           arduino-cli config init --overwrite
-          
-          # Add URLs individually to the config to prevent string/comma parsing errors in the shell
           arduino-cli config add board_manager.additional_urls https://adafruit.github.io/arduino-board-index/package_adafruit_index.json
           arduino-cli config add board_manager.additional_urls https://files.seeedstudio.com/arduino/package_seeeduino_boards_index.json
-          
-          # Update the index and install the specific Seeeduino nRF52 core
           arduino-cli core update-index
           arduino-cli core install Seeeduino:nrf52
 
       - name: Setup Workspace Libraries
         run: |
-          # Use the TinyUSB library bundled with the core to avoid version conflicts
-          # We link the root of this repo to the Arduino libraries folder
           mkdir -p $HOME/Arduino/libraries
           ln -s $GITHUB_WORKSPACE $HOME/Arduino/libraries/Seeed_Arduino_DAPLink
 
       - name: Compile simple_daplink
         run: |
-          # FQBN for the Seeed Studio XIAO nRF52840 (Sense and Standard use this same core logic)
           arduino-cli compile --fqbn Seeeduino:nrf52:xiaonRF52840Sense \
             --build-property "compiler.cpp.extra_flags=-DUSE_TINYUSB" \
             --output-dir ./build \
             $GITHUB_WORKSPACE/examples/simple_daplink/simple_daplink.ino
 
-      - name: Convert HEX to UF2
+      - name: Create UF2 Converter and Run
         run: |
-          # Family ID 0xADA52840 is the verified ID for the XIAO nRF52840 bootloader
-          python3 uf2conv.py ./build/simple_daplink.ino.hex -c -f 0xADA52840 -o ./build/XIAO_DAPLINK.uf2
+          # Instead of downloading, we use python to get the official script logic
+          # This avoids all DNS/URL resolution issues
+          pip3 install uf2conv
+          
+          # Run the installed uf2conv module directly
+          python3 -m uf2conv ./build/simple_daplink.ino.hex -c -f 0xADA52840 -o ./build/XIAO_DAPLINK.uf2
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
