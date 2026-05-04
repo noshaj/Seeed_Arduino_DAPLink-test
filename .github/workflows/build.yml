@@ -25,8 +25,8 @@ jobs:
           rm -rf /home/runner/.arduino15
           arduino-cli config init --overwrite
           
-          # 2. FULL VERIFIED URLS (MATCHING YOUR WAYPOINT SCREENSHOT EXACTLY)
-         arduino-cli config add board_manager.additional_urls https://adafruit.github.io/arduino-board-index/package_adafruit_index.json
+          # 2. FULL VERIFIED URLS (MATCHING YOUR SCREENSHOT EXACTLY)
+          arduino-cli config add board_manager.additional_urls https://adafruit.github.io/arduino-board-index/package_adafruit_index.json
           arduino-cli config add board_manager.additional_urls https://files.seeedstudio.com/arduino/package_seeeduino_boards_index.json
           
           # 3. Update index and install the Seeed nRF52 core
