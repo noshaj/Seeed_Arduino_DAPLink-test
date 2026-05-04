@@ -15,6 +15,7 @@ jobs:
 
       - name: Install nRF Util
         run: |
+          # Required by Seeed nRF52 core for the compilation process
           pip3 install adafruit-nrfutil
 
       - name: Setup Arduino CLI
@@ -23,29 +24,35 @@ jobs:
       - name: Install Platforms and Seeed Core
         run: |
           arduino-cli config init --overwrite
+          
+          # Add URLs individually to prevent shell parsing errors
           arduino-cli config add board_manager.additional_urls https://adafruit.github.io/arduino-board-index/package_adafruit_index.json
           arduino-cli config add board_manager.additional_urls https://files.seeedstudio.com/arduino/package_seeeduino_boards_index.json
+          
           arduino-cli core update-index
           arduino-cli core install Seeeduino:nrf52
 
       - name: Setup Workspace Libraries
         run: |
+          # Link your local DAPLink source to the Arduino library folder
           mkdir -p $HOME/Arduino/libraries
           ln -s $GITHUB_WORKSPACE $HOME/Arduino/libraries/Seeed_Arduino_DAPLink
 
       - name: Compile simple_daplink
         run: |
+          # Target the XIAO nRF52840 Sense variant
           arduino-cli compile --fqbn Seeeduino:nrf52:xiaonRF52840Sense \
             --build-property "compiler.cpp.extra_flags=-DUSE_TINYUSB" \
             --output-dir ./build \
             $GITHUB_WORKSPACE/examples/simple_daplink/simple_daplink.ino
 
       - name: Convert HEX to UF2
-        uses: crcatala/hex-to-uf2-action@v1
-        with:
-          input_file: './build/simple_daplink.ino.hex'
-          output_file: './build/XIAO_DAPLINK.uf2'
-          family_id: '0xADA52840'
+        run: |
+          # 1. Download the conversion script using the ONLY correct RAW URL
+          curl -L "https://githubusercontent.com" -o uf2conv.py
+          
+          # 2. Run the conversion using the XIAO nRF52840 Family ID (0xADA52840)
+          python3 uf2conv.py ./build/simple_daplink.ino.hex -c -f 0xADA52840 -o ./build/XIAO_DAPLINK.uf2
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
