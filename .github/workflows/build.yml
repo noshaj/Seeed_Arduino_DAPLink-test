@@ -15,25 +15,30 @@ jobs:
 
       - name: Install nRF Util
         run: |
+          # Use pip to install the utility (this usually uses a different mirror than github)
           pip3 install adafruit-nrfutil
 
-      - name: Manual Arduino CLI Setup
+      - name: Setup Arduino CLI
+        uses: arduino/setup-arduino-cli@v1
+
+      - name: Force Clean Configuration
         run: |
-          # 1. Download and install arduino-cli manually to ensure NO CACHED CONFIGS
-          curl -fsSL https://githubusercontent.com | sh
-          echo "$GITHUB_WORKSPACE/bin" >> $GITHUB_PATH
-          
-          # 2. Define exactly where the data lives to avoid default hidden folders
-          export ARDUINO_DIRECTORIES_DATA=$GITHUB_WORKSPACE/arduino_data
-          mkdir -p $ARDUINO_DIRECTORIES_DATA
-          
-          # 3. Create a clean config with only the correct URLs
-          ./bin/arduino-cli config init --dest-dir $GITHUB_WORKSPACE --overwrite
-          ./bin/arduino-cli config set board_manager.additional_urls https://github.io --config-file $GITHUB_WORKSPACE/arduino-cli.yaml
-          
-          # 4. Use the specific config file for all subsequent commands
-          ./bin/arduino-cli core update-index --config-file $GITHUB_WORKSPACE/arduino-cli.yaml
-          ./bin/arduino-cli core install Seeeduino:nrf52 --config-file $GITHUB_WORKSPACE/arduino-cli.yaml
+          # 1. Create a 100% clean config file locally in the workspace
+          # This ignores the corrupted /home/runner/.arduino15/ folder entirely
+          cat << 'EOF' > local-arduino-cli.yaml
+          board_manager:
+            additional_urls:
+              - https://github.io
+              - https://seeedstudio.com
+          directories:
+            data: ./arduino_data
+            downloads: ./arduino_downloads
+            user: ./arduino_user
+          EOF
+
+          # 2. Use this local config for all commands to bypass the 'github.io' error
+          arduino-cli core update-index --config-file local-arduino-cli.yaml
+          arduino-cli core install Seeeduino:nrf52 --config-file local-arduino-cli.yaml
 
       - name: Setup Workspace Libraries
         run: |
@@ -42,15 +47,16 @@ jobs:
 
       - name: Compile simple_daplink
         run: |
-          # Pointing to the manually installed CLI and local config
-          $GITHUB_WORKSPACE/bin/arduino-cli compile --fqbn Seeeduino:nrf52:xiaonRF52840Sense \
+          # Use the local config file here as well
+          arduino-cli compile --fqbn Seeeduino:nrf52:xiaonRF52840Sense \
             --build-property "compiler.cpp.extra_flags=-DUSE_TINYUSB" \
             --output-dir ./build \
-            --config-file $GITHUB_WORKSPACE/arduino-cli.yaml \
+            --config-file local-arduino-cli.yaml \
             $GITHUB_WORKSPACE/examples/simple_daplink/simple_daplink.ino
 
       - name: Create and Run UF2 Converter
         run: |
+          # Write the conversion logic locally to avoid any network/curl calls
           cat << 'EOF' > uf2conv.py
           import sys, struct, binascii, os
           def convert_to_uf2(infile, outfile, familyid):
