@@ -1,4 +1,4 @@
-name: Build DAPLink for XIAO nRF52840
+name: Build DAaPLink for XIAO nRF52840
 on: [push, pull_request]
 
 jobs:
