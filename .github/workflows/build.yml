@@ -22,9 +22,14 @@ jobs:
 
       - name: Install Platforms and Seeed Core
         run: |
+          # 1. Clean overwrite to purge any partial "github.io" or "seeedstudio.com" URLs
           arduino-cli config init --overwrite
-          arduino-cli config add board_manager.additional_urls https://github.io
-          arduino-cli config add board_manager.additional_urls https://seeedstudio.com
+          
+          # 2. Explicitly set the EXACT URLs from your screenshot
+          URLS="https://github.io"
+          arduino-cli config set board_manager.additional_urls $URLS
+          
+          # 3. Update and install core
           arduino-cli core update-index
           arduino-cli core install Seeeduino:nrf52
 
@@ -35,7 +40,6 @@ jobs:
 
       - name: Compile simple_daplink
         run: |
-          # Target the XIAO nRF52840 Sense
           arduino-cli compile --fqbn Seeeduino:nrf52:xiaonRF52840Sense \
             --build-property "compiler.cpp.extra_flags=-DUSE_TINYUSB" \
             --output-dir ./build \
@@ -43,7 +47,6 @@ jobs:
 
       - name: Create and Run UF2 Converter
         run: |
-          # Write the updated conversion script with the generic nRF52840 ID
           cat << 'EOF' > uf2conv.py
           import sys, struct, binascii, os
 
@@ -71,7 +74,6 @@ jobs:
               with open(outfile, "wb") as f:
                   num_blocks = len(dataplocks)
                   for i, (addr, data) in enumerate(dataplocks):
-                      # Block header: Start0, Start1, Flags (FamilyID present), Addr, Size, Index, Total, FamilyID
                       block = struct.pack("<IIIIIIII", 0x0A324655, 0x9E5D5157, 0x00002000, addr, 256, i, num_blocks, familyid)
                       block += data.ljust(476, b'\0')
                       block += struct.pack("<I", 0x0AB16F30)
@@ -79,7 +81,7 @@ jobs:
               print(f"Successfully created {outfile} with Family ID {hex(familyid)}")
 
           if __name__ == "__main__":
-              # Using the Generic nRF52840 ID (0x7e3d3dec) for maximum bootloader compatibility
+              # Using the Generic nRF52840 ID for best bootloader compatibility
               convert_to_uf2("./build/simple_daplink.ino.hex", "./build/XIAO_DAPLINK.uf2", 0x7e3d3dec)
           EOF
 
