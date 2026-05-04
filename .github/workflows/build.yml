@@ -1,9 +1,14 @@
-name: Build DAaPLink for XIAO nRF52840
+name: Build DAPLink for XIAO nRF52840
 on: [push, pull_request]
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      # This forces the CLI to ignore the corrupted /home/runner/.arduino15 directory
+      ARDUINO_DIRECTORIES_DATA: ${{ github.workspace }}/arduino_data
+      ARDUINO_DIRECTORIES_DOWNLOADS: ${{ github.workspace }}/arduino_downloads
+      ARDUINO_DIRECTORIES_USER: ${{ github.workspace }}/arduino_user
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -21,20 +26,16 @@ jobs:
 
       - name: Install Platforms and Seeed Core
         run: |
-          # 1. Kill the corrupted global folder entirely
-          rm -rf /home/runner/.arduino15
+          # Initialize a clean config in the isolated directory
+          arduino-cli config init --overwrite
           
-          # 2. Use a unique config filename to bypass any hidden system-level caching
-          # This is the 'secret sauce' to get back to the Run #20 success
-          arduino-cli config init --dest-dir . --overwrite
-          mv arduino-cli.yaml clean-config.yaml
+          # Add the correct URLs to the isolated config
+          arduino-cli config add board_manager.additional_urls https://github.io
+          arduino-cli config add board_manager.additional_urls https://seeedstudio.com
           
-          # 3. Use ONLY the clean config for all commands
-          arduino-cli config add board_manager.additional_urls https://github.io --config-file clean-config.yaml
-          arduino-cli config add board_manager.additional_urls https://seeedstudio.com --config-file clean-config.yaml
-          
-          arduino-cli core update-index --config-file clean-config.yaml
-          arduino-cli core install Seeeduino:nrf52 --config-file clean-config.yaml
+          # Update and install (this will now be 100% clean)
+          arduino-cli core update-index
+          arduino-cli core install Seeeduino:nrf52
 
       - name: Setup Workspace Libraries
         run: |
@@ -43,16 +44,14 @@ jobs:
 
       - name: Compile simple_daplink
         run: |
-          # Force compiler to use the clean local config
           arduino-cli compile --fqbn Seeeduino:nrf52:xiaonRF52840Sense \
             --build-property "compiler.cpp.extra_flags=-DUSE_TINYUSB" \
             --output-dir ./build \
-            --config-file clean-config.yaml \
             $GITHUB_WORKSPACE/examples/simple_daplink/simple_daplink.ino
 
       - name: Create and Run UF2 Converter
         run: |
-          # This is the exact Python heredoc that worked for you in Run #20
+          # Use the exact Python logic that worked in Run #20
           cat << 'EOF' > uf2conv.py
           import sys, struct, binascii, os
           def convert_to_uf2(infile, outfile, familyid):
