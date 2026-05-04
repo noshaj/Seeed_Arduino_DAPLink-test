@@ -21,6 +21,7 @@ jobs:
 
       - name: Install Platforms and Seeed Core
         run: |
+          # Waypoint Fix: Purge corrupted ghost URLs
           rm -rf /home/runner/.arduino15
           arduino-cli config init --overwrite
           arduino-cli config add board_manager.additional_urls https://adafruit.github.io/arduino-board-index/package_adafruit_index.json
@@ -35,22 +36,59 @@ jobs:
 
       - name: Compile simple_daplink
         run: |
-          # Keep the USB flags but simplify them to prevent binary bloat
+          # USB Identification flags to ensure the Mac sees the device after reboot
           arduino-cli compile --fqbn Seeeduino:nrf52:xiaonRF52840Sense \
             --build-property "compiler.cpp.extra_flags=-DUSE_TINYUSB -DUSB_VID=0x2886 -DUSB_PID=0x8045" \
             --output-dir ./build \
             $GITHUB_WORKSPACE/examples/simple_daplink/simple_daplink.ino
 
-      - name: Create UF2 Converter
+      - name: Create Offline UF2 Converter
         run: |
-          # Download the OFFICIAL Adafruit converter script (the industry standard)
-          curl -L "https://githubusercontent.com" -o uf2conv.py
+          # Writing the verified conversion logic locally to bypass all DNS/Curl errors
+          cat << 'EOF' > uf2conv.py
+          import sys, struct, binascii, os
 
-      - name: Convert to UF2 and Run
-        run: |
-          # Use the official script with the verified Family ID 0xADA52840
-          # -c means convert to UF2, -f specifies the Family ID
-          python3 uf2conv.py -c -f 0xADA52840 -o ./build/XIAO_DAPLINK.uf2 ./build/simple_daplink.ino.hex
+          def convert_to_uf2(infile, outfile, familyid):
+              with open(infile, "r") as f:
+                  lines = f.readlines()
+              data = {}
+              curr_upper_addr = 0
+              for line in lines:
+                  line = line.strip()
+                  if not line.startswith(':'): continue
+                  length = int(line[1:3], 16)
+                  addr = int(line[3:7], 16)
+                  rectype = int(line[7:9], 16)
+                  if rectype == 0:
+                      full_addr = curr_upper_addr + addr
+                      payload = binascii.unhexlify(line[9:9+length*2])
+                      for i, byte in enumerate(payload):
+                          data[full_addr + i] = byte
+                  elif rectype == 4:
+                      curr_upper_addr = int(line[9:13], 16) << 16
+              if not data:
+                  sys.exit(1)
+              addrs = sorted(data.keys())
+              # MANDATORY: Align to 256-byte boundary for nRF52840
+              min_addr = addrs[0] & ~0xFF
+              max_addr = addrs[-1]
+              with open(outfile, "wb") as f:
+                  blocks = []
+                  for addr in range(min_addr, max_addr + 1, 256):
+                      chunk = bytearray([data.get(addr + i, 0xFF) for i in range(256)])
+                      if any(b != 0xFF for b in chunk):
+                          blocks.append((addr, chunk))
+                  for i, (addr, chunk) in enumerate(blocks):
+                      # Header: 0x2000 flag signals FamilyID is present
+                      header = struct.pack("<IIIIIIII", 0x0A324655, 0x9E5D5157, 0x00002000, addr, 256, i, len(blocks), familyid)
+                      # Payload (476 bytes) + Footer (4 bytes) = 480 bytes
+                      f.write(header + chunk + b"\x00" * 220 + struct.pack("<I", 0x0AB16F30))
+              print(f"Created {outfile} for ID {hex(familyid)}")
+
+          if __name__ == "__main__":
+              convert_to_uf2("./build/simple_daplink.ino.hex", "./build/XIAO_DAPLINK.uf2", 0xADA52840)
+          EOF
+          python3 uf2conv.py
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
