@@ -40,13 +40,14 @@ jobs:
             --output-dir ./build \
             $GITHUB_WORKSPACE/examples/simple_daplink/simple_daplink.ino
 
-      - name: Download Converter and Run
+      - name: Generate and Run UF2 Converter
         run: |
-          # Use Python to download the script to bypass curl/wget DNS issues
-          python3 -c "import urllib.request; urllib.request.urlretrieve('https://githubusercontent.com', 'uf2conv.py')"
+          # 1. Install the conversion utility via pip to avoid wget/curl DNS issues
+          pip3 install uf2-utils
           
-          # Run the conversion
-          python3 uf2conv.py ./build/simple_daplink.ino.hex -c -f 0xADA52840 -o ./build/XIAO_DAPLINK.uf2
+          # 2. Run the conversion directly using the installed module
+          # Family ID 0xADA52840 is for XIAO nRF52840
+          python3 -m uf2conv ./build/simple_daplink.ino.hex -c -f 0xADA52840 -o ./build/XIAO_DAPLINK.uf2
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
