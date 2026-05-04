@@ -4,6 +4,11 @@ on: [push, pull_request]
 jobs:
   build:
     runs-on: ubuntu-latest
+    # GLOBAL OVERRIDE: This forces the CLI to look ONLY at your workspace
+    env:
+      ARDUINO_DIRECTORIES_DATA: ${{ github.workspace }}/arduino_data
+      ARDUINO_DIRECTORIES_DOWNLOADS: ${{ github.workspace }}/arduino_downloads
+      ARDUINO_DIRECTORIES_USER: ${{ github.workspace }}/arduino_user
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -19,25 +24,18 @@ jobs:
       - name: Setup Arduino CLI
         uses: arduino/setup-arduino-cli@v1
 
-      - name: Force Clean Local Configuration
+      - name: Force Clean Isolated Configuration
         run: |
-          # 1. Create a 100% clean config file locally in your workspace
-          # This 'cat' command doesn't need the internet. 
-          # It bypasses the corrupted /home/runner/.arduino15 folder entirely.
-          cat << 'EOF' > local-arduino-cli.yaml
-          board_manager:
-            additional_urls:
-              - https://github.io
-              - https://seeedstudio.com
-          directories:
-            data: ./arduino_data
-            downloads: ./arduino_downloads
-            user: ./arduino_user
-          EOF
-
-          # 2. Tell the CLI to use this local config for EVERYTHING
-          arduino-cli core update-index --config-file local-arduino-cli.yaml
-          arduino-cli core install Seeeduino:nrf52 --config-file local-arduino-cli.yaml
+          # 1. Initialize a clean config in the isolated directory
+          arduino-cli config init --overwrite
+          
+          # 2. Add the verified URLs to the isolated config
+          arduino-cli config add board_manager.additional_urls https://github.io
+          arduino-cli config add board_manager.additional_urls https://seeedstudio.com
+          
+          # 3. Update and install (this will now be 100% clean and skip the ghost URLs)
+          arduino-cli core update-index
+          arduino-cli core install Seeeduino:nrf52
 
       - name: Setup Workspace Libraries
         run: |
@@ -46,17 +44,15 @@ jobs:
 
       - name: Compile simple_daplink
         run: |
-          # Use the same local config file here to ensure isolation
+          # Target the XIAO nRF52840 Sense
           arduino-cli compile --fqbn Seeeduino:nrf52:xiaonRF52840Sense \
             --build-property "compiler.cpp.extra_flags=-DUSE_TINYUSB" \
             --output-dir ./build \
-            --config-file local-arduino-cli.yaml \
             $GITHUB_WORKSPACE/examples/simple_daplink/simple_daplink.ino
 
       - name: Create and Run UF2 Converter
         run: |
-          # Use the Python logic that worked in Run #20
-          # Again, this 'cat' command is local and won't fail due to DNS
+          # Write the conversion logic locally to avoid any network/curl issues
           cat << 'EOF' > uf2conv.py
           import sys, struct, binascii, os
           def convert_to_uf2(infile, outfile, familyid):
