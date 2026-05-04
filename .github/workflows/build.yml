@@ -4,7 +4,7 @@ on: [push, pull_request]
 jobs:
   build:
     runs-on: ubuntu-latest
-    # GLOBAL OVERRIDE: This forces the CLI to look ONLY at your workspace
+    # This block is the 'Secret Sauce'—it blinds the CLI to the corrupted system cache
     env:
       ARDUINO_DIRECTORIES_DATA: ${{ github.workspace }}/arduino_data
       ARDUINO_DIRECTORIES_DOWNLOADS: ${{ github.workspace }}/arduino_downloads
@@ -24,16 +24,16 @@ jobs:
       - name: Setup Arduino CLI
         uses: arduino/setup-arduino-cli@v1
 
-      - name: Force Clean Isolated Configuration
+      - name: Isolated Platform Installation
         run: |
-          # 1. Initialize a clean config in the isolated directory
+          # 1. Initialize a clean config in the isolated workspace folder
           arduino-cli config init --overwrite
           
-          # 2. Add the verified URLs to the isolated config
+          # 2. Add the verified URLs from your screenshot
           arduino-cli config add board_manager.additional_urls https://github.io
           arduino-cli config add board_manager.additional_urls https://seeedstudio.com
           
-          # 3. Update and install (this will now be 100% clean and skip the ghost URLs)
+          # 3. Update and install—this will now be 100% clean
           arduino-cli core update-index
           arduino-cli core install Seeeduino:nrf52
 
@@ -52,7 +52,7 @@ jobs:
 
       - name: Create and Run UF2 Converter
         run: |
-          # Write the conversion logic locally to avoid any network/curl issues
+          # The exact Python logic from your successful Run #20
           cat << 'EOF' > uf2conv.py
           import sys, struct, binascii, os
           def convert_to_uf2(infile, outfile, familyid):
@@ -76,6 +76,7 @@ jobs:
                       f.write(block)
               print(f"Successfully created {outfile}")
           if __name__ == "__main__":
+              # Generic nRF52840 ID for best bootloader compatibility
               convert_to_uf2("./build/simple_daplink.ino.hex", "./build/XIAO_DAPLINK.uf2", 0x7e3d3dec)
           EOF
           python3 uf2conv.py
