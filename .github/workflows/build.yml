@@ -40,14 +40,12 @@ jobs:
             --output-dir ./build \
             $GITHUB_WORKSPACE/examples/simple_daplink/simple_daplink.ino
 
-      - name: Create UF2 Converter and Run
-        run: |
-          # Instead of downloading, we use python to get the official script logic
-          # This avoids all DNS/URL resolution issues
-          pip3 install uf2conv
-          
-          # Run the installed uf2conv module directly
-          python3 -m uf2conv ./build/simple_daplink.ino.hex -c -f 0xADA52840 -o ./build/XIAO_DAPLINK.uf2
+      - name: Convert HEX to UF2
+        uses: crcatala/hex-to-uf2-action@v1
+        with:
+          input_file: './build/simple_daplink.ino.hex'
+          output_file: './build/XIAO_DAPLINK.uf2'
+          family_id: '0xADA52840'
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
