@@ -24,6 +24,7 @@ jobs:
       - name: Install Platforms and Seeed Core
         run: |
           arduino-cli config init --overwrite
+          # Using separate lines for URLs to prevent shell parsing errors
           arduino-cli config add board_manager.additional_urls https://adafruit.github.io/arduino-board-index/package_adafruit_index.json
           arduino-cli config add board_manager.additional_urls https://files.seeedstudio.com/arduino/package_seeeduino_boards_index.json
           arduino-cli core update-index
@@ -43,11 +44,11 @@ jobs:
 
       - name: Convert HEX to UF2
         run: |
-          # Use a variable to ensure the full URL is parsed correctly by the shell
-          UF2_SCRIPT_URL="https://githubusercontent.com"
-          wget "$UF2_SCRIPT_URL" -O uf2conv.py
+          # The exact raw URL is required: raw.githubusercontent.com
+          URL="https://githubusercontent.com"
+          wget -L "$URL" -O uf2conv.py
           
-          # Convert the HEX file to UF2 format
+          # Convert HEX to UF2 using the XIAO nRF52840 family ID
           python3 uf2conv.py ./build/simple_daplink.ino.hex -c -f 0xADA52840 -o ./build/XIAO_DAPLINK.uf2
 
       - name: Upload Build Artifacts
