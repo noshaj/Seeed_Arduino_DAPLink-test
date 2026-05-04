@@ -13,24 +13,33 @@ jobs:
 
       - name: Install Seeed nRF52 Platform
         run: |
+          # Use the correct JSON URL for Seeed boards
           arduino-cli core update-index --additional-urls https://seeedstudio.com
           arduino-cli core install Seeeduino:nrf52 --additional-urls https://seeedstudio.com
 
       - name: Install Dependencies
         run: |
           arduino-cli lib install "Adafruit TinyUSB Library"
-          # Link the current repo as a library
           mkdir -p $HOME/Arduino/libraries
           ln -s $GITHUB_WORKSPACE $HOME/Arduino/libraries/Seeed_Arduino_DAPLink
 
       - name: Compile simple_daplink
         run: |
+          # Use TinyUSB flag during compilation
           arduino-cli compile --fqbn Seeeduino:nrf52:xiaonRF52840Sense \
+          --build-property "build.extra_flags=-DUSE_TINYUSB" \
           --output-dir ./build \
           $GITHUB_WORKSPACE/examples/simple_daplink/simple_daplink.ino
+
+      - name: Convert HEX to UF2
+        run: |
+          # Download the conversion tool
+          wget https://githubusercontent.com
+          # Convert specifically for nRF52840 (Family ID: 0xADA52840)
+          python3 uf2conv.py ./build/simple_daplink.ino.hex -c -f 0xADA52840 -o ./build/XIAO_DAPLINK.uf2
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: daplink-firmware
-          path: ./build/*.hex
+          name: xiao-daplink-uf2
+          path: ./build/XIAO_DAPLINK.uf2
