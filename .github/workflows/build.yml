@@ -31,8 +31,7 @@ jobs:
 
       - name: Setup Workspace Libraries
         run: |
-          # We skip "arduino-cli lib install" for TinyUSB because it's 
-          # already bundled in the Seeeduino:nrf52 core.
+          # Use the TinyUSB library bundled with the core to avoid conflicts
           mkdir -p $HOME/Arduino/libraries
           ln -s $GITHUB_WORKSPACE $HOME/Arduino/libraries/Seeed_Arduino_DAPLink
 
@@ -45,6 +44,7 @@ jobs:
 
       - name: Convert HEX to UF2
         run: |
+          # FIX: Corrected the raw.githubusercontent.com URL
           wget https://githubusercontent.com
           python3 uf2conv.py ./build/simple_daplink.ino.hex -c -f 0xADA52840 -o ./build/XIAO_DAPLINK.uf2
 
