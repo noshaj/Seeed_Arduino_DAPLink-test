@@ -11,11 +11,19 @@ jobs:
       - name: Setup Arduino CLI
         uses: arduino/setup-arduino-cli@v1
 
-      - name: Install Seeed nRF52 Platform
+          - name: Install Seeed nRF52 Platform
         run: |
-          # Use the correct JSON URL for Seeed boards
-          arduino-cli core update-index --additional-urls https://seeedstudio.com
-          arduino-cli core install Seeeduino:nrf52 --additional-urls https://seeedstudio.com
+          # 1. Wipe any previous bad config
+          rm -rf ~/.arduino15/arduino-cli.yaml
+          
+          # 2. Define the ONLY correct URL
+          BOARD_URL="https://files.seeedstudio.com/arduino/package_seeeduino_boards_index.json"
+          
+          # 3. Update the index using only the correct URL
+          arduino-cli core update-index --additional-urls $BOARD_URL
+          
+          # 4. Install the Seeed nRF52 core
+          arduino-cli core install Seeeduino:nrf52 --additional-urls $BOARD_URL
 
       - name: Install Dependencies
         run: |
