@@ -13,30 +13,40 @@ jobs:
 
       - name: Install Seeed nRF52 Platform
         run: |
+          # 1. Wipe any previous bad config to ensure a clean start
           rm -rf ~/.arduino15/arduino-cli.yaml
-          BOARD_URL="https://files.seeedstudio.com/arduino/package_seeeduino_boards_index.json"
+          
+          # 2. Define the correct URL for Seeed nRF52 boards
+          BOARD_URL="https://seeedstudio.com"
+          
+          # 3. Update the index and install the core
           arduino-cli core update-index --additional-urls $BOARD_URL
           arduino-cli core install Seeeduino:nrf52 --additional-urls $BOARD_URL
 
       - name: Install Dependencies
         run: |
+          # Install the required TinyUSB library
           arduino-cli lib install "Adafruit TinyUSB Library"
+          
+          # Link the current repository as a library so the compiler can find it
           mkdir -p $HOME/Arduino/libraries
           ln -s $GITHUB_WORKSPACE $HOME/Arduino/libraries/Seeed_Arduino_DAPLink
 
       - name: Compile simple_daplink
         run: |
-          # The board name in the CLI is slightly different from the IDE
+          # Compile using the 'extra_flags' property to avoid overwriting the MCU definition
           arduino-cli compile --fqbn Seeeduino:nrf52:xiaonRF52840Sense \
-          --build-property "build.extra_flags=-DUSE_TINYUSB" \
+          --build-property "compiler.cpp.extra_flags=-DUSE_TINYUSB" \
           --output-dir ./build \
           $GITHUB_WORKSPACE/examples/simple_daplink/simple_daplink.ino
 
       - name: Convert HEX to UF2
         run: |
-          # Correct link to download the converter script
+          # Download the official Microsoft conversion tool
           wget https://githubusercontent.com
-          # Run conversion (Family ID 0xADA52840 is for nRF52840)
+          
+          # Convert the HEX output to a UF2 file compatible with XIAO nRF52840
+          # Family ID 0xADA52840 is required for the nRF52840 bootloader
           python3 uf2conv.py ./build/simple_daplink.ino.hex -c -f 0xADA52840 -o ./build/XIAO_DAPLINK.uf2
 
       - name: Upload Build Artifacts
