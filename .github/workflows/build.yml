@@ -48,6 +48,7 @@ jobs:
 
       - name: Create and Run UF2 Converter
         run: |
+          # Robust Python logic to ensure perfect UF2 blocks for nRF52
           cat << 'EOF' > uf2conv.py
           import sys, struct, binascii, os
 
@@ -74,11 +75,12 @@ jobs:
               with open(outfile, "wb") as f:
                   num_blocks = len(dataplocks)
                   for i, (addr, data) in enumerate(dataplocks):
-                      # Header: Start0, Start1, Flags (0x2000 = FamilyID present), Addr, Size, Index, Total, FamilyID
-                      block = struct.pack("<IIIIIIII", 0x0A324655, 0x9E5D5157, 0x00002000, addr, 256, i, num_blocks, familyid)
-                      block += data.ljust(476, b'\0')
-                      block += struct.pack("<I", 0x0AB16F30)
-                      f.write(block)
+                      # Header: Magic0, Magic1, Flags (0x2000 = FamilyID), Addr, Size(256), Index, Total, FamilyID
+                      header = struct.pack("<IIIIIIII", 0x0A324655, 0x9E5D5157, 0x00002000, addr, 256, i, num_blocks, familyid)
+                      # Data must be exactly 476 bytes of padding after the 256 bytes of data
+                      payload = data.ljust(476, b'\0')
+                      footer = struct.pack("<I", 0x0AB16F30)
+                      f.write(header + payload + footer)
               print(f"Successfully created {outfile} for Family ID {hex(familyid)}")
 
           if __name__ == "__main__":
