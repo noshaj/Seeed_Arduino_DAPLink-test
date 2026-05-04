@@ -31,7 +31,6 @@ jobs:
 
       - name: Setup Workspace Libraries
         run: |
-          # Use the TinyUSB library bundled with the core to avoid conflicts
           mkdir -p $HOME/Arduino/libraries
           ln -s $GITHUB_WORKSPACE $HOME/Arduino/libraries/Seeed_Arduino_DAPLink
 
@@ -44,8 +43,11 @@ jobs:
 
       - name: Convert HEX to UF2
         run: |
-          # FIX: Corrected the raw.githubusercontent.com URL
-          wget https://githubusercontent.com
+          # Use a variable to ensure the full URL is parsed correctly by the shell
+          UF2_SCRIPT_URL="https://githubusercontent.com"
+          wget "$UF2_SCRIPT_URL" -O uf2conv.py
+          
+          # Convert the HEX file to UF2 format
           python3 uf2conv.py ./build/simple_daplink.ino.hex -c -f 0xADA52840 -o ./build/XIAO_DAPLINK.uf2
 
       - name: Upload Build Artifacts
