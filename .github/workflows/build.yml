@@ -25,7 +25,7 @@ jobs:
           rm -rf /home/runner/.arduino15
           arduino-cli config init --overwrite
           
-          # 2. Add the FULL, verified URLs (Matching your screenshot exactly)
+          # 2. Add the FULL, verified URLs (Matching your screenshot EXACTLY)
           arduino-cli config add board_manager.additional_urls https://adafruit.github.io/arduino-board-index/package_adafruit_index.json
           arduino-cli config add board_manager.additional_urls https://files.seeedstudio.com/arduino/package_seeeduino_boards_index.json
           
@@ -40,7 +40,7 @@ jobs:
 
       - name: Compile simple_daplink
         run: |
-          # FQBN for Seeed Studio XIAO nRF52840
+          # Target the XIAO nRF52840 Sense
           arduino-cli compile --fqbn Seeeduino:nrf52:xiaonRF52840Sense \
             --build-property "compiler.cpp.extra_flags=-DUSE_TINYUSB" \
             --output-dir ./build \
@@ -48,7 +48,7 @@ jobs:
 
       - name: Create and Run UF2 Converter
         run: |
-          # Use the offline Python logic to bypass any DNS/Wget errors
+          # Embedded Python logic to bypass DNS issues
           cat << 'EOF' > uf2conv.py
           import sys, struct, binascii, os
           def convert_to_uf2(infile, outfile, familyid):
@@ -66,6 +66,7 @@ jobs:
               with open(outfile, "wb") as f:
                   num_blocks = len(dataplocks)
                   for i, (addr, data) in enumerate(dataplocks):
+                      # Header includes the 0x00002000 flag to signal FamilyID is present
                       block = struct.pack("<IIIIIIII", 0x0A324655, 0x9E5D5157, 0x00002000, addr, 256, i, num_blocks, familyid)
                       block += data.ljust(476, b'\0')
                       block += struct.pack("<I", 0x0AB16F30)
@@ -73,7 +74,7 @@ jobs:
               print(f"Successfully created {outfile}")
 
           if __name__ == "__main__":
-              # FIX: Use 0xADA52840 as required by your INFO_UF2.TXT
+              # VERIFIED Family ID for Seeed_XIAO_nRF52840_Sense: 0xADA52840
               convert_to_uf2("./build/simple_daplink.ino.hex", "./build/XIAO_DAPLINK.uf2", 0xADA52840)
           EOF
           python3 uf2conv.py
