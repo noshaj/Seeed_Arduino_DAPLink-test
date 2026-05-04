@@ -29,7 +29,7 @@ jobs:
           rm -rf /home/runner/.arduino15
           arduino-cli config init --overwrite
           
-          # 2. Add the FULL, verified URLs from the Waypoint
+          # 2. USE THE WAYPOINT LINKS (MATCHING THE COMMENT ABOVE EXACTLY)
           arduino-cli config add board_manager.additional_urls https://github.io
           arduino-cli config add board_manager.additional_urls https://seeedstudio.com
           
@@ -46,7 +46,7 @@ jobs:
         run: |
           # FORCE USB HARDWARE ON:
           # -DUSE_TINYUSB: Replaces standard serial stack
-          # -DUSB_VID/PID: Seeed official IDs so Mac recognizes the driver
+          # -DUSB_VID/PID: Seeed official IDs for XIAO nRF52840
           # -DNRF52840_XXAA: Critical switch to wake up USB pins on this chip
           arduino-cli compile --fqbn Seeeduino:nrf52:xiaonRF52840Sense \
             --build-property "compiler.cpp.extra_flags=-DUSE_TINYUSB -DUSB_VID=0x2886 -DUSB_PID=0x8045 -DNRF52840_XXAA" \
@@ -74,6 +74,8 @@ jobs:
                       for i, byte in enumerate(payload): data[full_addr + i] = byte
                   elif rectype == 4:
                       curr_upper_addr = int(line[9:13], 16) << 16
+              if not data:
+                  sys.exit(1)
               addrs = sorted(data.keys())
               min_addr = addrs[0] & ~0xFF; max_addr = addrs[-1]
               with open(outfile, "wb") as f:
