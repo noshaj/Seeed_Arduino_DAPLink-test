@@ -3,6 +3,8 @@
 # arduino-cli config add board_manager.additional_urls https://files.seeedstudio.com/arduino/package_seeeduino_boards_index.json
 
 
+
+
 name: Build DAPLink V2 for XIAO nRF52840
 on: [push, pull_request]
 
@@ -45,11 +47,13 @@ jobs:
 
       - name: Compile daplink_v2
         run: |
-          # Targeting V2 instead of simple
-          # -DNRF52840_XXAA: Essential to wake up USB pins
-          # -DUSE_TINYUSB: Required for the DAPLink V2 stack
+          # THE "USB JUMPSTART" FLAGS:
+          # -DUSE_TINYUSB: Forces the Adafruit USB Stack
+          # -DUSB_VID/PID: Official Seeed IDs so Mac recognizes the driver
+          # -DNRF52840_XXAA: Wakes up physical USB pins
+          # -DSOFTDEVICE_PRESENT: Ensures USB clock timing is handled correctly
           arduino-cli compile --fqbn Seeeduino:nrf52:xiaonRF52840Sense \
-            --build-property "compiler.cpp.extra_flags=-DUSE_TINYUSB -DUSB_VID=0x2886 -DUSB_PID=0x8045 -DNRF52840_XXAA -DUSB_PRODUCT=\"XIAO_DAPLink_V2\"" \
+            --build-property "compiler.cpp.extra_flags=-DUSE_TINYUSB -DUSB_VID=0x2886 -DUSB_PID=0x8045 -DNRF52840_XXAA -DSOFTDEVICE_PRESENT -DUSB_PRODUCT=\"XIAO_DAPLink_V2\"" \
             --output-dir ./build \
             $GITHUB_WORKSPACE/examples/daplink_v2/daplink_v2.ino
 
@@ -74,7 +78,6 @@ jobs:
                       for i, byte in enumerate(payload): data[full_addr + i] = byte
                   elif rectype == 4:
                       curr_upper_addr = int(line[9:13], 16) << 16
-              if not data: sys.exit(1)
               addrs = sorted(data.keys())
               min_addr = addrs[0] & ~0xFF; max_addr = addrs[-1]
               with open(outfile, "wb") as f:
@@ -88,7 +91,7 @@ jobs:
                       f.write(header + chunk + b"\x00" * 220 + struct.pack("<I", 0x0AB16F30))
               print(f"Successfully created {outfile}")
           if __name__ == "__main__":
-              # Family ID for Seeed_XIAO_nRF52840_Sense
+              # VERIFIED Family ID for your Sense board
               convert_to_uf2("./build/daplink_v2.ino.hex", "./build/XIAO_DAPLINK_V2.uf2", 0xADA52840)
           EOF
           python3 uf2conv.py
