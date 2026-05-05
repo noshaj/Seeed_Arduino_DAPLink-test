@@ -2,6 +2,8 @@
 # arduino-cli config add board_manager.additional_urls https://adafruit.github.io/arduino-board-index/package_adafruit_index.json
 # arduino-cli config add board_manager.additional_urls https://files.seeedstudio.com/arduino/package_seeeduino_boards_index.json
 
+
+
 name: Build DAPLink for XIAO nRF52840
 on: [push, pull_request]
 
@@ -50,7 +52,7 @@ jobs:
           # -DNRF52840_XXAA: Critical switch to wake up USB pins
           # -DCFG_TUSB_MCU=OPT_MCU_NRF52840: Mandatory for TinyUSB on nRF52840
           arduino-cli compile --fqbn Seeeduino:nrf52:xiaonRF52840Sense \
-            --build-property "compiler.cpp.extra_flags=-DUSE_TINYUSB -DUSB_VID=0x2886 -DUSB_PID=0x8045 -DNRF52840_XXAA -DCFG_TUSB_MCU=OPT_MCU_NRF52840" \
+            --build-property "compiler.cpp.extra_flags=-DUSE_TINYUSB -DUSB_VID=0x2886 -DUSB_PID=0x8045 -DNRF52840_XXAA -DCFG_TUSB_MCU=OPT_MCU_NRF52840 -DUSB_MANUFACTURER=\"Seeed\" -DUSB_PRODUCT=\"XIAO_DAPLink\"" \
             --output-dir ./build \
             $GITHUB_WORKSPACE/examples/simple_daplink/simple_daplink.ino
 
