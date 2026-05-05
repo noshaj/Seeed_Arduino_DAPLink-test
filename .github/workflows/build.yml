@@ -3,8 +3,7 @@
 # arduino-cli config add board_manager.additional_urls https://files.seeedstudio.com/arduino/package_seeeduino_boards_index.json
 
 
-
-name: Build DAPLink for XIAO nRF52840
+name: Build DAPLink V2 for XIAO nRF52840
 on: [push, pull_request]
 
 jobs:
@@ -44,17 +43,15 @@ jobs:
           mkdir -p $HOME/Arduino/libraries
           ln -s $GITHUB_WORKSPACE $HOME/Arduino/libraries/Seeed_Arduino_DAPLink
 
-      - name: Compile simple_daplink
+      - name: Compile daplink_v2
         run: |
-          # THE "WAKE UP" FLAGS: 
-          # -DUSE_TINYUSB: Forces the Adafruit USB stack
-          # -DUSB_VID/PID: Official Seeed IDs so Mac recognizes the driver
-          # -DNRF52840_XXAA: Critical switch to wake up USB pins
-          # -DCFG_TUSB_MCU=OPT_MCU_NRF52840: Mandatory for TinyUSB on nRF52840
+          # Targeting V2 instead of simple
+          # -DNRF52840_XXAA: Essential to wake up USB pins
+          # -DUSE_TINYUSB: Required for the DAPLink V2 stack
           arduino-cli compile --fqbn Seeeduino:nrf52:xiaonRF52840Sense \
-            --build-property "compiler.cpp.extra_flags=-DUSE_TINYUSB -DUSB_VID=0x2886 -DUSB_PID=0x8045 -DNRF52840_XXAA -DCFG_TUSB_MCU=OPT_MCU_NRF52840 -DUSB_MANUFACTURER=\"Seeed\" -DUSB_PRODUCT=\"XIAO_DAPLink\"" \
+            --build-property "compiler.cpp.extra_flags=-DUSE_TINYUSB -DUSB_VID=0x2886 -DUSB_PID=0x8045 -DNRF52840_XXAA -DUSB_PRODUCT=\"XIAO_DAPLink_V2\"" \
             --output-dir ./build \
-            $GITHUB_WORKSPACE/examples/simple_daplink/simple_daplink.ino
+            $GITHUB_WORKSPACE/examples/daplink_v2/daplink_v2.ino
 
       - name: Create and Run UF2 Converter
         run: |
@@ -70,7 +67,7 @@ jobs:
               for line in lines:
                   line = line.strip()
                   if not line.startswith(':'): continue
-                  length, addr, rectype = int(line[1:3], 16), int(line[3:7], 16), int(line[7:9], 16)
+                  length = int(line[1:3], 16); addr = int(line[3:7], 16); rectype = int(line[7:9], 16)
                   if rectype == 0:
                       full_addr = curr_upper_addr + addr
                       payload = binascii.unhexlify(line[9:9+length*2])
@@ -91,12 +88,14 @@ jobs:
                       f.write(header + chunk + b"\x00" * 220 + struct.pack("<I", 0x0AB16F30))
               print(f"Successfully created {outfile}")
           if __name__ == "__main__":
-              convert_to_uf2("./build/simple_daplink.ino.hex", "./build/XIAO_DAPLINK.uf2", 0xADA52840)
+              # Family ID for Seeed_XIAO_nRF52840_Sense
+              convert_to_uf2("./build/daplink_v2.ino.hex", "./build/XIAO_DAPLINK_V2.uf2", 0xADA52840)
           EOF
           python3 uf2conv.py
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: xiao-daplink-uf2
-          path: ./build/XIAO_DAPLINK.uf2
+          name: xiao-daplink-v2-uf2
+          path: ./build/XIAO_DAPLINK_V2.uf2
+
