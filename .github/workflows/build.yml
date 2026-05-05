@@ -3,8 +3,6 @@
 # arduino-cli config add board_manager.additional_urls https://files.seeedstudio.com/arduino/package_seeeduino_boards_index.json
 
 
-
-
 name: Build DAPLink for XIAO nRF52840
 on: [push, pull_request]
 
@@ -50,10 +48,10 @@ jobs:
           # THE "WAKE UP" FLAGS: 
           # -DUSE_TINYUSB: Forces the Adafruit USB stack required for CMSIS-DAP
           # -DUSB_VID/PID: Matches Seeed official IDs so Mac recognizes the driver
-          # -DUSB_PRODUCT: Renames the device so you know the code is running
+          # -DUSB_PRODUCT: Explicitly sets the name so it shows up in your menu
           # -DNRF52840_XXAA: Essential switch to wake up the physical USB pins
           arduino-cli compile --fqbn Seeeduino:nrf52:xiaonRF52840Sense \
-            --build-property "compiler.cpp.extra_flags=-DUSE_TINYUSB -DUSB_VID=0x2886 -DUSB_PID=0x8045 -DUSB_PRODUCT=\"XIAO_DAPLink\" -DNRF52840_XXAA" \
+            --build-property "compiler.cpp.extra_flags=-DUSE_TINYUSB -DUSB_VID=0x2886 -DUSB_PID=0x8045 -DUSB_PRODUCT=\"XIAO_DAPLink\" -DUSB_MANUFACTURER=\"Seeed\" -DNRF52840_XXAA" \
             --output-dir ./build \
             $GITHUB_WORKSPACE/examples/simple_daplink/simple_daplink.ino
 
