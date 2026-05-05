@@ -1,7 +1,6 @@
 # 📍 WAYPOINT LINKS (DO NOT DELETE):
 # arduino-cli config add board_manager.additional_urls https://adafruit.github.io/arduino-board-index/package_adafruit_index.json
-# arduino-cli config add board_manager.additional_urls https://files.seeedstudio.com/arduino/package_seeeduino_boards_index.json 
-
+# arduino-cli config add board_manager.additional_urls https://files.seeedstudio.com/arduino/package_seeeduino_boards_index.json
 
 name: Build DAPLink for XIAO nRF52840
 on: [push, pull_request]
@@ -26,15 +25,15 @@ jobs:
 
       - name: Install Platforms and Seeed Core
         run: |
-          # 1. KILL the corrupted global folder that holds the 'github.io' ghost URLs
+          # 1. KILL the corrupted global folder holding ghost URLs
           rm -rf /home/runner/.arduino15
           arduino-cli config init --overwrite
           
-          # 2. USE THE WAYPOINT LINKS (MATCHING THE COMMENT ABOVE EXACTLY)
+          # 2. ACTIVE FIX: Using the FULL Waypoint JSON links
           arduino-cli config add board_manager.additional_urls https://adafruit.github.io/arduino-board-index/package_adafruit_index.json
           arduino-cli config add board_manager.additional_urls https://files.seeedstudio.com/arduino/package_seeeduino_boards_index.json
           
-          # 3. Update index and install the Seeed nRF52 core
+          # 3. Update index and install core
           arduino-cli core update-index
           arduino-cli core install Seeeduino:nrf52
 
@@ -47,7 +46,7 @@ jobs:
         run: |
           # FORCE USB HARDWARE ON:
           # -DUSE_TINYUSB: Replaces standard serial stack
-          # -DUSB_VID/PID: Seeed official IDs for XIAO nRF52840
+          # -DUSB_VID/PID: Seeed official IDs so Mac recognizes the driver
           # -DNRF52840_XXAA: Critical switch to wake up USB pins on this chip
           arduino-cli compile --fqbn Seeeduino:nrf52:xiaonRF52840Sense \
             --build-property "compiler.cpp.extra_flags=-DUSE_TINYUSB -DUSB_VID=0x2886 -DUSB_PID=0x8045 -DNRF52840_XXAA" \
@@ -75,8 +74,6 @@ jobs:
                       for i, byte in enumerate(payload): data[full_addr + i] = byte
                   elif rectype == 4:
                       curr_upper_addr = int(line[9:13], 16) << 16
-              if not data:
-                  sys.exit(1)
               addrs = sorted(data.keys())
               min_addr = addrs[0] & ~0xFF; max_addr = addrs[-1]
               with open(outfile, "wb") as f:
