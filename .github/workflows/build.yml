@@ -2,6 +2,7 @@
 # arduino-cli config add board_manager.additional_urls https://adafruit.github.io/arduino-board-index/package_adafruit_index.json
 # arduino-cli config add board_manager.additional_urls https://files.seeedstudio.com/arduino/package_seeeduino_boards_index.json
 
+
 name: Build DAPLink for XIAO nRF52840
 on: [push, pull_request]
 
@@ -25,11 +26,11 @@ jobs:
 
       - name: Install Platforms and Seeed Core
         run: |
-          # 1. KILL the corrupted global folder holding ghost URLs
+          # 1. KILL the corrupted global folder that holds the 'github.io' ghost URLs
           rm -rf /home/runner/.arduino15
           arduino-cli config init --overwrite
           
-          # 2. ACTIVE FIX: Using the FULL Waypoint JSON links
+          # 2. ACTIVE FIX: Replaced truncated URLs with the FULL Waypoint JSON links
           arduino-cli config add board_manager.additional_urls https://adafruit.github.io/arduino-board-index/package_adafruit_index.json
           arduino-cli config add board_manager.additional_urls https://files.seeedstudio.com/arduino/package_seeeduino_boards_index.json
           
@@ -44,10 +45,10 @@ jobs:
 
       - name: Compile simple_daplink
         run: |
-          # FORCE USB HARDWARE ON:
-          # -DUSE_TINYUSB: Replaces standard serial stack
-          # -DUSB_VID/PID: Seeed official IDs so Mac recognizes the driver
-          # -DNRF52840_XXAA: Critical switch to wake up USB pins on this chip
+          # THE CRITICAL FIX: 
+          # -DUSE_TINYUSB: Forces the Adafruit USB Stack
+          # -DUSB_VID/PID: Sets Seeed's official Hardware IDs
+          # -DNRF52840_XXAA: Ensures the compiler knows the chip variant
           arduino-cli compile --fqbn Seeeduino:nrf52:xiaonRF52840Sense \
             --build-property "compiler.cpp.extra_flags=-DUSE_TINYUSB -DUSB_VID=0x2886 -DUSB_PID=0x8045 -DNRF52840_XXAA" \
             --output-dir ./build \
@@ -55,7 +56,7 @@ jobs:
 
       - name: Create and Run UF2 Converter
         run: |
-          # Waypoint Script: Handles the 256-byte alignment needed for successful reboot
+          # The exact 256-byte alignment script that triggered your reboot success
           cat << 'EOF' > uf2conv.py
           import sys, struct, binascii, os
           def convert_to_uf2(infile, outfile, familyid):
@@ -85,7 +86,6 @@ jobs:
                   for i, (addr, chunk) in enumerate(blocks):
                       header = struct.pack("<IIIIIIII", 0x0A324655, 0x9E5D5157, 0x00002000, addr, 256, i, num_blocks, familyid)
                       f.write(header + chunk + b"\x00" * 220 + struct.pack("<I", 0x0AB16F30))
-              print(f"Successfully created {outfile}")
           if __name__ == "__main__":
               convert_to_uf2("./build/simple_daplink.ino.hex", "./build/XIAO_DAPLINK.uf2", 0xADA52840)
           EOF
